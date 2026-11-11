@@ -1,0 +1,1102 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>サウナ健康チェック帳</title>
+  <meta name="theme-color" content="#b4532a">
+  <!-- ホーム画面に追加するための設定
+       manifest（マニフェスト）：アプリの名前やアイコンを書いた「名札」のようなファイル
+       apple-touch-icon：iPhone のホーム画面に表示されるアイコン -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="サウナ健康">
+  <style>
+    /* ===== 色の決まり（明るい画面用） ===== */
+    :root {
+      --bg: #faf6f1;
+      --card: #ffffff;
+      --text: #2b2420;
+      --sub: #7a6d64;
+      --line: #e8ddd3;
+      --accent: #b4532a;      /* サウナの木と熱のイメージ */
+      --accent-soft: #f6e4d8;
+      --cool: #2f6f8f;        /* 水風呂のイメージ（「後」の色） */
+      --cool-soft: #e0eef4;
+      --warn: #c0392b;
+      --star: #e0a526;
+      --radius: 14px;
+      /* グラフの線の色（見分けやすさを検証ずみ） */
+      --s-before: #b4532a;
+      --s-after: #1a6fa8;
+      --grid: #eee6de;
+    }
+    /* 暗い画面（ダークモード）用 */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #1c1815;
+        --card: #27211d;
+        --text: #f1e9e2;
+        --sub: #a89b91;
+        --line: #3b332d;
+        --accent: #e07a4a;
+        --accent-soft: #3d2a20;
+        --cool: #6fb3d2;
+        --cool-soft: #1f3540;
+        --warn: #ff7b6b;
+        --star: #f0c04a;
+        --s-before: #d4693a;
+        --s-after: #3f8fd0;
+        --grid: #352d28;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      line-height: 1.6;
+      padding-bottom: calc(80px + env(safe-area-inset-bottom));
+    }
+    header {
+      padding: calc(16px + env(safe-area-inset-top)) 16px 8px;
+      max-width: 560px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 1.25rem; margin: 0; }
+    header p { margin: 2px 0 0; color: var(--sub); font-size: .85rem; }
+    main { max-width: 560px; margin: 0 auto; padding: 0 16px; }
+
+    /* ===== 下のタブ ===== */
+    nav.tabs {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      background: var(--card);
+      border-top: 1px solid var(--line);
+      padding-bottom: env(safe-area-inset-bottom);
+      z-index: 10;
+    }
+    nav.tabs button {
+      appearance: none; border: 0; background: none; color: var(--sub);
+      font: inherit; font-size: .8rem; padding: 10px 4px 12px;
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      cursor: pointer;
+    }
+    nav.tabs button .ico { font-size: 1.3rem; line-height: 1; }
+    nav.tabs button[aria-selected="true"] { color: var(--accent); font-weight: 700; }
+
+    /* ===== カードと入力欄 ===== */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 16px;
+      margin: 12px 0;
+    }
+    .card h2 { font-size: 1rem; margin: 0 0 12px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; min-width: 0; }
+    .field:last-child { margin-bottom: 0; }
+    label, .label { font-size: .85rem; color: var(--sub); }
+    input, textarea {
+      font: inherit; font-size: 16px; /* 16px未満だとiPhoneで勝手に拡大されるため */
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      width: 100%;
+      min-width: 0;
+    }
+    input:focus, textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+    input[aria-invalid="true"] { border-color: var(--warn); }
+
+    /* セット数の ＋ − */
+    .stepper { display: flex; align-items: center; gap: 12px; }
+    .stepper button {
+      width: 44px; height: 44px; border-radius: 50%;
+      border: 1px solid var(--line); background: var(--bg); color: var(--text);
+      font-size: 1.3rem; cursor: pointer;
+    }
+    .stepper button:disabled { opacity: .35; cursor: default; }
+    .stepper output { font-size: 1.4rem; font-weight: 700; min-width: 3em; text-align: center; }
+
+    /* ととのい度の ★ */
+    .stars { display: flex; gap: 4px; }
+    .stars button {
+      appearance: none; border: 0; background: none; cursor: pointer;
+      font-size: 2rem; line-height: 1; padding: 4px; color: var(--line);
+    }
+    .stars button.on { color: var(--star); }
+
+    /* 前／後の体重・血圧 */
+    .bp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .bp-col { border-radius: 12px; padding: 12px; }
+    .bp-col.before { background: var(--accent-soft); }
+    .bp-col.after  { background: var(--cool-soft); }
+    .bp-col h3 { margin: 0 0 8px; font-size: .95rem; }
+    .bp-col.before h3 { color: var(--accent); }
+    .bp-col.after  h3 { color: var(--cool); }
+    .bp-col input { background: var(--card); }
+    .bp-pair { display: flex; align-items: center; gap: 4px; }
+    .bp-pair span { color: var(--sub); }
+    .unit { font-size: .75rem; color: var(--sub); }
+    .hint { font-size: .8rem; color: var(--sub); margin: 8px 0 0; }
+    .err { font-size: .85rem; color: var(--warn); margin: 8px 0 0; }
+
+    button.primary {
+      display: block; width: 100%;
+      font: inherit; font-weight: 700; font-size: 1.05rem;
+      background: var(--accent); color: #fff;
+      border: 0; border-radius: 12px; padding: 14px; cursor: pointer;
+    }
+    button.primary:active { transform: translateY(1px); }
+
+    /* 保存したときのお知らせ */
+    .toast {
+      position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      background: var(--text); color: var(--bg);
+      padding: 10px 18px; border-radius: 999px; font-size: .9rem;
+      opacity: 0; pointer-events: none; transition: opacity .25s;
+    }
+    .toast.show { opacity: 1; }
+
+    .last { font-size: .9rem; }
+    .last .muted, .placeholder { color: var(--sub); }
+    .placeholder { text-align: center; padding: 40px 16px; }
+
+    /* ===== 直しているときの帯 ===== */
+    .editing {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      background: var(--cool-soft); color: var(--cool);
+      border-radius: var(--radius); padding: 10px 14px; margin: 12px 0 0; font-size: .9rem;
+    }
+    .editing[hidden] { display: none; }
+    button.ghost {
+      font: inherit; font-size: .9rem; cursor: pointer;
+      background: var(--card); color: var(--text);
+      border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px;
+    }
+
+    /* ===== ふりかえり一覧 ===== */
+    .log { list-style: none; margin: 0; padding: 0; }
+    .log li { margin: 12px 0; }
+    .log .card { margin: 0; }
+    .log .top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .log .place { font-weight: 700; font-size: 1.05rem; overflow-wrap: anywhere; }
+    .log .rate { color: var(--star); white-space: nowrap; letter-spacing: 1px; }
+    .log .when { color: var(--sub); font-size: .85rem; }
+    .log table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: .9rem; }
+    .log th, .log td { padding: 6px 4px; border-top: 1px solid var(--line); text-align: right; white-space: nowrap; }
+    .log th { color: var(--sub); font-weight: normal; text-align: left; }
+    .log thead th { border-top: 0; font-size: .8rem; text-align: right; }
+    .log thead th:first-child { text-align: left; }
+    .log thead th:not(:first-child) { width: 24%; } /* 前・後・差の列幅をどのカードでもそろえる */
+    .log td.diff { color: var(--sub); font-size: .85rem; }
+    .log td.down { color: var(--cool); }
+    .log .high { color: var(--warn); font-weight: 700; }
+    .log .alert { color: var(--warn); font-size: .85rem; margin: 8px 0 0; }
+    .log .memo { margin: 8px 0 0; font-size: .9rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .log .acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+    .log .acts .del { color: var(--warn); }
+
+    .backup .hint { margin: 0; }
+    .backup .acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+
+    /* ===== まとめ ===== */
+    .periods { display: flex; gap: 6px; margin: 12px 0 0; flex-wrap: wrap; }
+    .periods button {
+      font: inherit; font-size: .85rem; cursor: pointer;
+      background: var(--card); color: var(--sub);
+      border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px;
+    }
+    .periods button[aria-pressed="true"] { background: var(--text); color: var(--bg); border-color: var(--text); }
+    .tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0; }
+    .tile { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; min-width: 0; }
+    .tile .t-label { font-size: .8rem; color: var(--sub); }
+    .tile .t-num { font-size: 1.6rem; font-weight: 700; line-height: 1.3; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+    .tile .t-num.small { font-size: 1.05rem; padding-top: 6px; }
+    .tile .t-num small { font-size: .85rem; font-weight: normal; color: var(--sub); margin-left: 2px; }
+    .tile .t-sub { font-size: .75rem; color: var(--sub); }
+
+    .legend { display: flex; gap: 16px; font-size: .85rem; color: var(--sub); margin: 0 0 4px; }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .key { display: inline-block; width: 16px; height: 2px; border-radius: 1px; }
+    .key.before { background: var(--s-before); }
+    .key.after  { background: var(--s-after); }
+    .chart { position: relative; }
+    .chart h3 { font-size: .95rem; margin: 0 0 2px; }
+    .chart h3 small { font-weight: normal; color: var(--sub); }
+    .chart svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: pan-y; }
+    .chart svg:focus { outline: none; }
+    .chart svg:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 4px; }
+    .chart .none { color: var(--sub); font-size: .85rem; padding: 12px 0; }
+    .chart + .chart { margin-top: 20px; }
+    svg .grid { stroke: var(--grid); stroke-width: 1; }
+    svg .axis { fill: var(--sub); font-size: 11px; }
+    svg .ref { stroke: var(--warn); stroke-width: 1; stroke-dasharray: 4 4; opacity: .6; }
+    svg .ref-t { fill: var(--warn); font-size: 10px; }
+    /* 線と重なっても読めるように、文字のまわりを背景色でふちどる */
+    svg .ref-t, svg .lab { paint-order: stroke; stroke: var(--card); stroke-width: 3px; stroke-linejoin: round; }
+    svg .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+    svg .line.before, svg .dot.before { stroke: var(--s-before); }
+    svg .line.after,  svg .dot.after  { stroke: var(--s-after); }
+    svg .dot { stroke-width: 0; }
+    svg .dot.before { fill: var(--s-before); }
+    svg .dot.after  { fill: var(--s-after); }
+    svg .dot { paint-order: stroke; }
+    svg .ring { fill: none; stroke: var(--card); stroke-width: 2; }
+    svg .lab { font-size: 11px; fill: var(--text); }
+    svg .cross { stroke: var(--sub); stroke-width: 1; }
+    .tip {
+      position: absolute; top: 24px; pointer-events: none; z-index: 2;
+      background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+      box-shadow: 0 4px 14px rgba(0,0,0,.12);
+      padding: 8px 10px; font-size: .8rem; white-space: nowrap;
+    }
+    .tip[hidden] { display: none; }
+    .tip .d { color: var(--sub); margin-bottom: 2px; }
+    .tip .r { display: flex; align-items: center; gap: 6px; }
+    .tip .r b { font-size: .95rem; font-variant-numeric: tabular-nums; }
+    .tip .r span { color: var(--sub); }
+    .note { font-size: .75rem; color: var(--sub); margin: 8px 0 16px; }
+
+    /* 幅のせまいスマホでは前／後を縦にならべる */
+    @media (max-width: 360px) {
+      .bp-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>♨️ サウナ健康チェック帳</h1>
+    <p>サウナの記録と、前後の体重・血圧をいっしょに残します</p>
+  </header>
+
+  <main>
+    <!-- ===== 画面1：記録する ===== -->
+    <section id="view-add" class="view" aria-label="記録する">
+      <div class="editing" id="editing" hidden>
+        <span id="editing-text">記録を直しています</span>
+        <button type="button" class="ghost" id="edit-cancel">やめる</button>
+      </div>
+      <form id="form" novalidate>
+        <div class="card">
+          <h2>いつ・どこで</h2>
+          <div class="row">
+            <div class="field">
+              <label for="date">日付</label>
+              <input type="date" id="date" required>
+            </div>
+            <div class="field">
+              <label for="time">時刻</label>
+              <input type="time" id="time" required>
+            </div>
+          </div>
+          <div class="field">
+            <label for="place">施設の名前</label>
+            <input type="text" id="place" list="place-list" placeholder="例：〇〇の湯" autocomplete="off" required>
+            <datalist id="place-list"></datalist>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>どうだった？</h2>
+          <div class="field">
+            <span class="label" id="sets-label">セット数（サウナ→水風呂→休憩 を1回として）</span>
+            <div class="stepper" role="group" aria-labelledby="sets-label">
+              <button type="button" id="sets-minus" aria-label="セット数を減らす">−</button>
+              <output id="sets" aria-live="polite">3回</output>
+              <button type="button" id="sets-plus" aria-label="セット数を増やす">＋</button>
+            </div>
+          </div>
+          <div class="field">
+            <span class="label" id="rate-label">ととのい度</span>
+            <div class="stars" id="stars" role="radiogroup" aria-labelledby="rate-label"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>体重・血圧</h2>
+          <div class="bp-grid">
+            <div class="bp-col before" data-when="before">
+              <h3>入る前</h3>
+            </div>
+            <div class="bp-col after" data-when="after">
+              <h3>出た後</h3>
+            </div>
+          </div>
+          <p class="hint">はかっていない欄は空のままで大丈夫です。</p>
+          <p class="err" id="bp-err" hidden></p>
+        </div>
+
+        <div class="card">
+          <div class="field">
+            <label for="memo">メモ</label>
+            <textarea id="memo" rows="2" placeholder="水風呂が16℃で最高だった、など"></textarea>
+          </div>
+        </div>
+
+        <button type="submit" class="primary" id="submit">この内容で記録する</button>
+      </form>
+
+      <div class="card last" id="last"></div>
+    </section>
+
+    <!-- ===== 画面2：ふりかえり ===== -->
+    <section id="view-list" class="view" aria-label="ふりかえり" hidden>
+      <ul class="log" id="log"></ul>
+      <div class="card backup">
+        <h2>記録の控え</h2>
+        <p class="hint">記録はこのブラウザの中にだけ入っています。ときどきファイルに書き出しておくと、機種変更のときやもしものときに読みこんで戻せます。</p>
+        <div class="acts">
+          <button type="button" class="ghost" id="btn-export">ファイルに書き出す</button>
+          <button type="button" class="ghost" id="btn-import">ファイルから読みこむ</button>
+        </div>
+        <input type="file" id="in-import" accept="application/json,.json" hidden>
+      </div>
+    </section>
+
+    <!-- ===== 画面3：まとめ ===== -->
+    <section id="view-stats" class="view" aria-label="まとめ" hidden>
+      <div class="periods" id="periods" role="group" aria-label="期間">
+        <button type="button" data-p="1">1か月</button>
+        <button type="button" data-p="3">3か月</button>
+        <button type="button" data-p="12">1年</button>
+        <button type="button" data-p="0">すべて</button>
+      </div>
+      <div class="tiles" id="tiles"></div>
+      <div class="card">
+        <h2>体重・血圧のうつりかわり</h2>
+        <div class="legend" aria-hidden="true">
+          <span><i class="key before"></i>入る前</span>
+          <span><i class="key after"></i>出た後</span>
+        </div>
+        <div id="charts"></div>
+      </div>
+      <p class="note">赤い点線は血圧が高めの目安（上140・下90）です。このアプリは記録用で、医療の判断をするものではありません。気になるときはお医者さんに相談してください。一つひとつの数字は「ふりかえり」で見られます。</p>
+    </section>
+  </main>
+
+  <nav class="tabs" role="tablist" aria-label="画面の切りかえ">
+    <button type="button" role="tab" data-view="add"   aria-selected="true"><span class="ico">✏️</span>記録する</button>
+    <button type="button" role="tab" data-view="list"  aria-selected="false"><span class="ico">📖</span>ふりかえり</button>
+    <button type="button" role="tab" data-view="stats" aria-selected="false"><span class="ico">📈</span>まとめ</button>
+  </nav>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+
+    // ===================================================
+    //  タブの切りかえ
+    // ===================================================
+    function showView(name) {
+      document.querySelectorAll(".view").forEach((v) => { v.hidden = v.id !== `view-${name}`; });
+      document.querySelectorAll("nav.tabs button").forEach((b) => {
+        b.setAttribute("aria-selected", b.dataset.view === name);
+      });
+      if (name === "list") renderList();
+      if (name === "stats") renderStats();
+      window.scrollTo(0, 0);
+    }
+    document.querySelectorAll("nav.tabs button").forEach((b) => {
+      b.onclick = () => showView(b.dataset.view);
+    });
+
+    // ===================================================
+    //  保存のしくみ
+    //  localStorage（ブラウザの中にある小さな保存場所）に、
+    //  記録の一覧を JSON（データを文字で書いた形式）にして入れておきます。
+    // ===================================================
+    const LOG_KEY = "sauna-check-log";
+
+    function loadRecords() {
+      try { return JSON.parse(localStorage.getItem(LOG_KEY)) || []; }
+      catch (e) { return []; }
+    }
+    function saveRecords(list) {
+      try { localStorage.setItem(LOG_KEY, JSON.stringify(list)); return true; }
+      catch (e) { alert("保存できませんでした。ブラウザの設定を確認してください。"); return false; }
+    }
+
+    let records = loadRecords();
+
+    // ===================================================
+    //  小さな道具
+    // ===================================================
+    const pad = (x) => String(x).padStart(2, "0");
+    function nowDate() {
+      const d = new Date();
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    }
+    function nowTime() {
+      const d = new Date();
+      return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    // 文字をそのまま表示するための安全対策（<b> などがタグとして動かないように）
+    function esc(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    }
+    function toast(msg) {
+      const t = $("toast");
+      t.textContent = msg;
+      t.classList.add("show");
+      clearTimeout(toast.timer);
+      toast.timer = setTimeout(() => t.classList.remove("show"), 2000);
+    }
+
+    // ===================================================
+    //  セット数（＋ −）
+    // ===================================================
+    const SETS_MIN = 1, SETS_MAX = 10;
+    let sets = 3;
+    function drawSets() {
+      $("sets").textContent = `${sets}回`;
+      $("sets-minus").disabled = sets <= SETS_MIN;
+      $("sets-plus").disabled = sets >= SETS_MAX;
+    }
+    $("sets-minus").onclick = () => { sets = Math.max(SETS_MIN, sets - 1); drawSets(); };
+    $("sets-plus").onclick  = () => { sets = Math.min(SETS_MAX, sets + 1); drawSets(); };
+
+    // ===================================================
+    //  ととのい度（★1〜5）
+    // ===================================================
+    let rating = 3;
+    function drawStars() {
+      const box = $("stars");
+      box.innerHTML = "";
+      for (let i = 1; i <= 5; i++) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = "★";
+        b.className = i <= rating ? "on" : "";
+        b.setAttribute("role", "radio");
+        b.setAttribute("aria-checked", i === rating);
+        b.setAttribute("aria-label", `${i}つ星`);
+        b.onclick = () => { rating = i; drawStars(); };
+        box.appendChild(b);
+      }
+    }
+
+    // ===================================================
+    //  体重・血圧の入力欄（前と後で同じ形なので、まとめて作る）
+    //  sys＝上の血圧（最高血圧）、dia＝下の血圧（最低血圧）、pulse＝脈拍
+    // ===================================================
+    const HEALTH = {
+      weight: { min: 20,  max: 300, step: "0.1", mode: "decimal" },
+      sys:    { min: 50,  max: 260, step: "1",   mode: "numeric" },
+      dia:    { min: 30,  max: 180, step: "1",   mode: "numeric" },
+      pulse:  { min: 30,  max: 220, step: "1",   mode: "numeric" },
+    };
+    const WHEN_LABEL = { before: "入る前", after: "出た後" };
+
+    document.querySelectorAll(".bp-col").forEach((col) => {
+      const w = col.dataset.when;
+      const inp = (key, label) => {
+        const h = HEALTH[key];
+        return `<input type="number" id="${w}-${key}" inputmode="${h.mode}" step="${h.step}" min="${h.min}" max="${h.max}" aria-label="${WHEN_LABEL[w]}の${label}">`;
+      };
+      col.insertAdjacentHTML("beforeend", `
+        <div class="field">
+          <span class="label">体重 <span class="unit">kg</span></span>
+          ${inp("weight", "体重（kg）")}
+        </div>
+        <div class="field">
+          <span class="label">血圧 <span class="unit">上 / 下</span></span>
+          <div class="bp-pair">${inp("sys", "上の血圧")}<span>/</span>${inp("dia", "下の血圧")}</div>
+        </div>
+        <div class="field">
+          <span class="label">脈拍 <span class="unit">回/分</span></span>
+          ${inp("pulse", "脈拍")}
+        </div>`);
+    });
+
+    // 入力された値を読みとる。空欄は null（「はかっていない」の意味）にする
+    function readHealth(w) {
+      const out = {};
+      for (const key of Object.keys(HEALTH)) {
+        const v = $(`${w}-${key}`).value.trim();
+        out[key] = v === "" ? null : Number(v);
+      }
+      return out;
+    }
+
+    // おかしな値がないか調べる。問題があればその文を返す
+    function checkHealth() {
+      const problems = [];
+      document.querySelectorAll(".bp-col input").forEach((i) => i.removeAttribute("aria-invalid"));
+      for (const w of ["before", "after"]) {
+        const h = readHealth(w);
+        for (const [key, rule] of Object.entries(HEALTH)) {
+          const v = h[key];
+          if (v != null && (Number.isNaN(v) || v < rule.min || v > rule.max)) {
+            $(`${w}-${key}`).setAttribute("aria-invalid", "true");
+            problems.push(`${WHEN_LABEL[w]}の数字に、ありえない値があります。`);
+          }
+        }
+        if ((h.sys == null) !== (h.dia == null)) {
+          $(`${w}-${h.sys == null ? "sys" : "dia"}`).setAttribute("aria-invalid", "true");
+          problems.push(`${WHEN_LABEL[w]}の血圧は、上と下の両方を入れてください。`);
+        } else if (h.sys != null && h.dia >= h.sys) {
+          $(`${w}-dia`).setAttribute("aria-invalid", "true");
+          problems.push(`${WHEN_LABEL[w]}の血圧は、上の数字のほうが大きくなるはずです。`);
+        }
+      }
+      return [...new Set(problems)];
+    }
+
+    // ===================================================
+    //  記録する
+    // ===================================================
+    $("form").onsubmit = (e) => {
+      e.preventDefault(); // ページが再読みこみされないようにする
+
+      const place = $("place").value.trim();
+      if (!$("date").value || !$("time").value || !place) {
+        alert("日付・時刻・施設の名前を入れてください。");
+        return;
+      }
+      const problems = checkHealth();
+      $("bp-err").hidden = problems.length === 0;
+      $("bp-err").textContent = problems.join(" ");
+      if (problems.length) {
+        $("bp-err").scrollIntoView({ behavior: "smooth", block: "center" });
+        return;
+      }
+
+      const rec = {
+        id: editingId ?? Date.now(),
+        date: $("date").value,
+        time: $("time").value,
+        place,
+        sets,
+        rating,
+        before: readHealth("before"),
+        after: readHealth("after"),
+        memo: $("memo").value.trim(),
+      };
+      // 直しているときは同じ id の記録を入れかえ、そうでなければ新しく足す
+      const before = records;
+      records = editingId != null
+        ? records.map((r) => (r.id === editingId ? rec : r))
+        : [...records, rec];
+      if (!saveRecords(records)) { records = before; return; }
+
+      if (editingId != null) {
+        endEdit();
+        renderLast();
+        toast("直しました");
+        showView("list");
+        return;
+      }
+      clearForm();
+      renderLast();
+      toast("記録しました ♨️");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    // 入力欄をもとに戻す（施設名は次も同じことが多いので残す）
+    function clearForm() {
+      document.querySelectorAll(".bp-col input").forEach((i) => { i.value = ""; i.removeAttribute("aria-invalid"); });
+      $("bp-err").hidden = true;
+      $("memo").value = "";
+      $("date").value = nowDate();
+      $("time").value = nowTime();
+      sets = 3; rating = 3;
+      drawSets(); drawStars();
+    }
+
+    // ===================================================
+    //  記録を直す
+    //  一覧の「直す」→ 記録画面に中身を入れる → 保存で入れかえ
+    // ===================================================
+    let editingId = null; // 直している記録の id（直していないときは null）
+
+    function startEdit(id) {
+      const r = records.find((x) => x.id === id);
+      if (!r) return;
+      editingId = id;
+      $("date").value = r.date;
+      $("time").value = r.time;
+      $("place").value = r.place;
+      sets = r.sets; rating = r.rating;
+      drawSets(); drawStars();
+      for (const w of ["before", "after"]) {
+        for (const key of Object.keys(HEALTH)) {
+          const v = r[w]?.[key];
+          $(`${w}-${key}`).value = v ?? "";
+          $(`${w}-${key}`).removeAttribute("aria-invalid");
+        }
+      }
+      $("bp-err").hidden = true;
+      $("memo").value = r.memo || "";
+      $("editing-text").textContent = `${dateText(r.date)}の記録を直しています`;
+      $("editing").hidden = false;
+      $("submit").textContent = "直した内容で保存する";
+      showView("add");
+    }
+    function endEdit() {
+      editingId = null;
+      $("editing").hidden = true;
+      $("submit").textContent = "この内容で記録する";
+      clearForm();
+    }
+    $("edit-cancel").onclick = () => { endEdit(); showView("list"); };
+
+    // ===================================================
+    //  直近の記録（保存できたかが分かるように、記録画面の下に出す）
+    // ===================================================
+    function healthText(h) {
+      if (!h) return "―";
+      const parts = [];
+      if (h.weight != null) parts.push(`${h.weight}kg`);
+      if (h.sys != null) parts.push(`${h.sys}/${h.dia}`);
+      if (h.pulse != null) parts.push(`脈${h.pulse}`);
+      return parts.length ? parts.join("・") : "―";
+    }
+    function renderLast() {
+      // 施設名の候補（前に入れた名前）
+      const places = [...new Set(records.map((r) => r.place))];
+      $("place-list").innerHTML = places.map((p) => `<option value="${esc(p)}">`).join("");
+
+      if (records.length === 0) {
+        $("last").innerHTML = `<span class="muted">まだ記録がありません。最初の1回を書いてみましょう。</span>`;
+        return;
+      }
+      const r = sortedRecords()[0];
+      const [, m, d] = r.date.split("-");
+      $("last").innerHTML = `
+        <div class="muted">これまで ${records.length} 件。いちばん新しい記録：</div>
+        <div><b>${esc(r.place)}</b>　${Number(m)}月${Number(d)}日 ${esc(r.time)}・${r.sets}セット・${"★".repeat(r.rating)}</div>
+        <div>前：${healthText(r.before)}　→　後：${healthText(r.after)}</div>`;
+    }
+
+    // 新しい順（日付・時刻が同じなら、あとから入れたものが上）
+    function sortedRecords() {
+      return [...records].sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time) || b.id - a.id);
+    }
+    function dateText(date) {
+      const [y, m, d] = date.split("-").map(Number);
+      const wd = "日月火水木金土"[new Date(y, m - 1, d).getDay()];
+      return `${y}年${m}月${d}日（${wd}）`;
+    }
+
+    // ===================================================
+    //  ふりかえり一覧
+    // ===================================================
+    // 血圧が高めかどうか（上140以上 または 下90以上）
+    const isHigh = (h) => h && h.sys != null && (h.sys >= 140 || h.dia >= 90);
+
+    // 前と後の差を「+0.3」「−0.6」のように書く（どちらかが空なら空）
+    function diffText(a, b, digits = 0) {
+      if (a == null || b == null) return "";
+      const d = Number((b - a).toFixed(digits));
+      if (d === 0) return "±0";
+      return (d > 0 ? "+" : "−") + Math.abs(d).toFixed(digits);
+    }
+    const val = (v, digits = 0) => (v == null ? "―" : Number(v).toFixed(digits));
+    const bpText = (h) => (h && h.sys != null ? `${h.sys}/${h.dia}` : "―");
+
+    function healthTable(r) {
+      const b = r.before || {}, a = r.after || {};
+      const rows = [];
+      if (b.weight != null || a.weight != null) {
+        const d = diffText(b.weight, a.weight, 1);
+        rows.push(`<tr><th>体重 kg</th><td>${val(b.weight, 1)}</td><td>${val(a.weight, 1)}</td>
+          <td class="diff ${d.startsWith("−") ? "down" : ""}">${d}</td></tr>`);
+      }
+      if (b.sys != null || a.sys != null) {
+        const d = b.sys != null && a.sys != null
+          ? `${diffText(b.sys, a.sys)} / ${diffText(b.dia, a.dia)}` : "";
+        rows.push(`<tr><th>血圧</th>
+          <td class="${isHigh(b) ? "high" : ""}">${bpText(b)}</td>
+          <td class="${isHigh(a) ? "high" : ""}">${bpText(a)}</td>
+          <td class="diff">${d}</td></tr>`);
+      }
+      if (b.pulse != null || a.pulse != null) {
+        rows.push(`<tr><th>脈拍</th><td>${val(b.pulse)}</td><td>${val(a.pulse)}</td>
+          <td class="diff">${diffText(b.pulse, a.pulse)}</td></tr>`);
+      }
+      if (!rows.length) return "";
+      return `<table>
+        <thead><tr><th></th><th>前</th><th>後</th><th>差</th></tr></thead>
+        <tbody>${rows.join("")}</tbody></table>`;
+    }
+
+    function renderList() {
+      if (records.length === 0) {
+        $("log").innerHTML = `<li><div class="card placeholder">まだ記録がありません。「記録する」から最初の1回を書いてみましょう。</div></li>`;
+        return;
+      }
+      $("log").innerHTML = sortedRecords().map((r) => `
+        <li><div class="card">
+          <div class="top">
+            <span class="place">${esc(r.place)}</span>
+            <span class="rate" aria-label="ととのい度 ${r.rating}">${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</span>
+          </div>
+          <div class="when">${dateText(r.date)} ${esc(r.time)}・${r.sets}セット</div>
+          ${healthTable(r)}
+          ${isHigh(r.before) || isHigh(r.after) ? `<p class="alert">血圧が高めです。体調に気をつけてくださいね。</p>` : ""}
+          ${r.memo ? `<p class="memo">${esc(r.memo)}</p>` : ""}
+          <div class="acts">
+            <button type="button" class="ghost" data-edit="${r.id}">直す</button>
+            <button type="button" class="ghost del" data-del="${r.id}">消す</button>
+          </div>
+        </div></li>`).join("");
+
+      $("log").querySelectorAll("[data-edit]").forEach((b) => {
+        b.onclick = () => startEdit(Number(b.dataset.edit));
+      });
+      $("log").querySelectorAll("[data-del]").forEach((b) => {
+        b.onclick = () => {
+          const id = Number(b.dataset.del);
+          const r = records.find((x) => x.id === id);
+          if (!r || !confirm(`${dateText(r.date)}「${r.place}」の記録を消しますか？（元に戻せません）`)) return;
+          const keep = records;
+          records = records.filter((x) => x.id !== id);
+          if (!saveRecords(records)) { records = keep; return; }
+          if (editingId === id) endEdit();
+          renderList();
+          renderLast();
+          toast("消しました");
+        };
+      });
+    }
+
+    // ===================================================
+    //  記録の控え：ファイルに書き出す／読みこむ
+    // ===================================================
+    $("btn-export").onclick = () => {
+      if (records.length === 0) { alert("まだ記録がありません。"); return; }
+      // どのアプリのファイルか分かるように、名札（app と version）をつけて書き出す
+      const data = { app: "sauna-check", version: 1, exportedAt: new Date().toISOString(), records };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `sauna-check-${nowDate()}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      toast(`${records.length}件を書き出しました`);
+    };
+
+    $("btn-import").onclick = () => $("in-import").click();
+    $("in-import").onchange = async (e) => {
+      const file = e.target.files[0];
+      e.target.value = ""; // 同じファイルをもう一度選んでも動くように
+      if (!file) return;
+      let list;
+      try {
+        const data = JSON.parse(await file.text());
+        // このアプリの書き出し（名札つき）でも、sauna-app の書き出し（記録の並びだけ）でも受けつける
+        list = Array.isArray(data) ? data : data?.records;
+        if (!Array.isArray(list)) throw new Error();
+      } catch (err) {
+        alert("このファイルは読みこめませんでした。書き出したファイル（.json）を選んでください。");
+        return;
+      }
+      const ok = list.map(normalizeRecord).filter(Boolean);
+      const have = new Set(records.map((r) => r.id));
+      const add = ok.filter((r) => !have.has(r.id) && (have.add(r.id), true));
+      const skipped = list.length - ok.length;
+      if (add.length === 0) {
+        alert(`足せる記録はありませんでした。（同じ記録がもう入っている${skipped ? `か、読めない記録が${skipped}件ある` : ""}ようです）`);
+        return;
+      }
+      const msg = `${add.length}件の記録を足します。よろしいですか？`
+        + (ok.length - add.length ? `\n（もう入っている${ok.length - add.length}件は足しません）` : "")
+        + (skipped ? `\n（形がおかしい${skipped}件は読みとばします）` : "");
+      if (!confirm(msg)) return;
+      const keep = records;
+      records = [...records, ...add];
+      if (!saveRecords(records)) { records = keep; return; }
+      renderList();
+      renderLast();
+      toast(`${add.length}件を読みこみました`);
+    };
+
+    // 読みこんだ1件を、このアプリの形にととのえる。使えない記録なら null を返す
+    // （ファイルの中身は書きかえられているかもしれないので、そのまま信用しない）
+    function normalizeRecord(r) {
+      if (!r || typeof r !== "object") return null;
+      const id = Number(r.id);
+      if (!Number.isFinite(id)) return null;
+      if (typeof r.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(r.date)) return null;
+      if (typeof r.place !== "string" || !r.place.trim()) return null;
+      const time = typeof r.time === "string" && /^\d{2}:\d{2}$/.test(r.time) ? r.time : ""; // sauna-app の記録には時刻がない
+      const intIn = (v, min, max, def) => {
+        const n = Math.round(Number(v));
+        return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def;
+      };
+      // sauna-app の記録はセットの中身を並べた形なので、その数をセット数にする
+      const sets = Array.isArray(r.sets) ? intIn(r.sets.length, SETS_MIN, SETS_MAX, 3) : intIn(r.sets, SETS_MIN, SETS_MAX, 3);
+      const health = (h) => {
+        const out = {};
+        for (const [key, rule] of Object.entries(HEALTH)) {
+          const v = h && h[key] != null && h[key] !== "" ? Number(h[key]) : null;
+          out[key] = v != null && Number.isFinite(v) && v >= rule.min && v <= rule.max ? v : null;
+        }
+        // 血圧は上と下がそろっていて、上のほうが大きいときだけ使う
+        if (out.sys == null || out.dia == null || out.dia >= out.sys) { out.sys = null; out.dia = null; }
+        return out;
+      };
+      return {
+        id, date: r.date, time, place: r.place.trim().slice(0, 100), sets,
+        rating: intIn(r.rating, 1, 5, 3),
+        before: health(r.before), after: health(r.after),
+        memo: typeof r.memo === "string" ? r.memo.slice(0, 2000) : "",
+      };
+    }
+
+    // ===================================================
+    //  まとめ（集計とグラフ）
+    // ===================================================
+    let period = 0; // 何か月分を見るか（0 はすべて）
+
+    document.querySelectorAll("#periods button").forEach((b) => {
+      b.onclick = () => { period = Number(b.dataset.p); renderStats(); };
+    });
+
+    // 選んだ期間に入る記録だけを、古い順で返す
+    function periodRecords() {
+      let from = "";
+      if (period > 0) {
+        const d = new Date();
+        d.setMonth(d.getMonth() - period);
+        from = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+      }
+      return records
+        .filter((r) => r.date >= from)
+        .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time) || a.id - b.id);
+    }
+
+    function renderStats() {
+      document.querySelectorAll("#periods button").forEach((b) => {
+        b.setAttribute("aria-pressed", Number(b.dataset.p) === period);
+      });
+      const list = periodRecords();
+
+      // --- 数字のカード ---
+      const count = {};
+      list.forEach((r) => { count[r.place] = (count[r.place] || 0) + 1; });
+      const fav = Object.entries(count).sort((a, b) => b[1] - a[1])[0];
+      const avgRate = list.length ? list.reduce((s, r) => s + r.rating, 0) / list.length : null;
+      const wDiffs = list
+        .filter((r) => r.before?.weight != null && r.after?.weight != null)
+        .map((r) => r.after.weight - r.before.weight);
+      const avgW = wDiffs.length ? wDiffs.reduce((s, x) => s + x, 0) / wDiffs.length : null;
+
+      const tile = (label, num, sub, small = false) => `
+        <div class="tile">
+          <div class="t-label">${label}</div>
+          <div class="t-num ${small ? "small" : ""}">${num}</div>
+          <div class="t-sub">${sub}</div>
+        </div>`;
+      $("tiles").innerHTML = [
+        tile("回数", `${list.length}<small>回</small>`, `通算 ${records.length} 回`),
+        tile("平均ととのい度", avgRate == null ? "―" : `${avgRate.toFixed(1)}<small>★</small>`, "5点満点"),
+        tile("よく行く施設", fav ? esc(fav[0]) : "―", fav ? `${fav[1]} 回` : "　", true),
+        tile("体重の変化（平均）", avgW == null ? "―" : `${diffText(0, avgW, 1)}<small>kg</small>`,
+          wDiffs.length ? `前後をはかった ${wDiffs.length} 回の平均` : "前と後の両方をはかると出ます"),
+      ].join("");
+
+      // --- グラフ ---
+      $("charts").innerHTML = "";
+      CHARTS.forEach((c) => $("charts").appendChild(lineChart(c, list)));
+    }
+
+    const CHARTS = [
+      { key: "weight", title: "体重", unit: "kg", digits: 1 },
+      { key: "sys", title: "上の血圧", unit: "mmHg", digits: 0, ref: 140 },
+      { key: "dia", title: "下の血圧", unit: "mmHg", digits: 0, ref: 90 },
+    ];
+    const SVG_NS = "http://www.w3.org/2000/svg";
+    function svgEl(name, attrs, parent) {
+      const el = document.createElementNS(SVG_NS, name);
+      for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+      if (parent) parent.appendChild(el);
+      return el;
+    }
+    // 目もりの間かくを、1・2・5・10… のきりのよい数にする
+    function niceStep(range, count) {
+      const raw = range / count;
+      const p = 10 ** Math.floor(Math.log10(raw));
+      const n = raw / p;
+      return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10) * p;
+    }
+
+    // 1つの折れ線グラフ（前と後の2本）を作る
+    function lineChart(cfg, list) {
+      const box = document.createElement("div");
+      box.className = "chart";
+      const h3 = document.createElement("h3");
+      h3.innerHTML = `${cfg.title} <small>${cfg.unit}</small>`;
+      box.appendChild(h3);
+
+      // この項目を前か後のどちらかではかった記録だけ使う
+      const pts = list
+        .map((r) => ({
+          r,
+          t: new Date(`${r.date}T${r.time || "00:00"}`).getTime(),
+          before: r.before?.[cfg.key] ?? null,
+          after: r.after?.[cfg.key] ?? null,
+        }))
+        .filter((p) => p.before != null || p.after != null);
+
+      if (pts.length < 2) {
+        const p = document.createElement("p");
+        p.className = "none";
+        p.textContent = pts.length ? "2回以上はかると、グラフが出ます。" : "この期間はまだはかっていません。";
+        box.appendChild(p);
+        return box;
+      }
+
+      // --- 大きさと、値→位置の変換 ---
+      const W = Math.max(280, $("charts").clientWidth || 320), H = 170;
+      const M = { l: 36, r: 30, t: 10, b: 24 };
+      const vals = pts.flatMap((p) => [p.before, p.after]).filter((v) => v != null);
+      let lo = Math.min(...vals), hi = Math.max(...vals);
+      if (cfg.ref) { lo = Math.min(lo, cfg.ref); hi = Math.max(hi, cfg.ref); } // 目安の線も入るように
+      if (hi - lo < (cfg.digits ? 1 : 10)) { const mid = (hi + lo) / 2; const half = cfg.digits ? 0.5 : 5; lo = mid - half; hi = mid + half; }
+      const step = niceStep(hi - lo, 4);
+      lo = Math.floor(lo / step) * step;
+      hi = Math.ceil(hi / step) * step;
+      const t0 = pts[0].t, t1 = pts[pts.length - 1].t;
+      const x = (t) => (t1 === t0 ? (M.l + W - M.r) / 2 : M.l + ((t - t0) / (t1 - t0)) * (W - M.l - M.r));
+      const y = (v) => M.t + (1 - (v - lo) / (hi - lo)) * (H - M.t - M.b);
+
+      const svg = svgEl("svg", {
+        viewBox: `0 0 ${W} ${H}`, tabindex: 0, role: "img",
+        "aria-label": `${cfg.title}のグラフ。左右の矢印キーで1回ずつ数字を見られます`,
+      });
+
+      // --- 横の目もり線と数字（ひかえめに） ---
+      for (let v = lo; v <= hi + step / 2; v += step) {
+        svgEl("line", { class: "grid", x1: M.l, x2: W - M.r, y1: y(v), y2: y(v) }, svg);
+        svgEl("text", { class: "axis", x: M.l - 6, y: y(v) + 4, "text-anchor": "end" }, svg)
+          .textContent = Number(v.toFixed(cfg.digits));
+      }
+      // --- 下の日付（最初と最後） ---
+      const md = (p) => `${Number(p.r.date.slice(5, 7))}/${Number(p.r.date.slice(8))}`;
+      svgEl("text", { class: "axis", x: M.l, y: H - 6, "text-anchor": "start" }, svg).textContent = md(pts[0]);
+      svgEl("text", { class: "axis", x: W - M.r, y: H - 6, "text-anchor": "end" }, svg).textContent = md(pts[pts.length - 1]);
+
+      // --- 高めの目安の点線 ---
+      if (cfg.ref) {
+        svgEl("line", { class: "ref", x1: M.l, x2: W - M.r, y1: y(cfg.ref), y2: y(cfg.ref) }, svg);
+        svgEl("text", { class: "ref-t", x: M.l + 4, y: y(cfg.ref) - 4, "text-anchor": "start" }, svg).textContent = `高め ${cfg.ref}`;
+      }
+
+      // --- 前と後の線と点 ---
+      const ends = [];
+      for (const s of ["before", "after"]) {
+        const sp = pts.filter((p) => p[s] != null);
+        if (!sp.length) continue;
+        svgEl("path", { class: `line ${s}`, d: sp.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p[s]).toFixed(1)}`).join("") }, svg);
+        sp.forEach((p) => {
+          svgEl("circle", { class: "ring", cx: x(p.t), cy: y(p[s]), r: 4 }, svg);
+          svgEl("circle", { class: `dot ${s}`, cx: x(p.t), cy: y(p[s]), r: 4 }, svg);
+        });
+        const last = sp[sp.length - 1];
+        ends.push({ s, x: x(last.t), y: y(last[s]) });
+      }
+      // 線の右はしに「前」「後」の名前（重なるときは上下にずらす）
+      if (ends.length === 2 && Math.abs(ends[0].y - ends[1].y) < 13) {
+        const [a, b] = ends[0].y <= ends[1].y ? ends : [ends[1], ends[0]];
+        const mid = (a.y + b.y) / 2;
+        a.y = mid - 7; b.y = mid + 7;
+      }
+      ends.forEach((e) => {
+        svgEl("text", { class: "lab", x: e.x + 8, y: e.y + 4 }, svg).textContent = e.s === "before" ? "前" : "後";
+      });
+
+      // --- なぞると数字が出るしかけ ---
+      const cross = svgEl("line", { class: "cross", y1: M.t, y2: H - M.b, visibility: "hidden" }, svg);
+      const hit = svgEl("rect", { x: 0, y: 0, width: W, height: H, fill: "transparent" }, svg);
+      const tip = document.createElement("div");
+      tip.className = "tip";
+      tip.hidden = true;
+      let cur = -1;
+
+      function show(i) {
+        cur = i;
+        const p = pts[i];
+        const px = x(p.t);
+        cross.setAttribute("x1", px); cross.setAttribute("x2", px);
+        cross.setAttribute("visibility", "visible");
+        tip.replaceChildren();
+        const d = document.createElement("div");
+        d.className = "d";
+        d.textContent = `${dateText(p.r.date)} ${p.r.time}・${p.r.place}`;
+        tip.appendChild(d);
+        for (const s of ["before", "after"]) {
+          const row = document.createElement("div");
+          row.className = "r";
+          const k = document.createElement("i"); k.className = `key ${s}`;
+          const v = document.createElement("b"); v.textContent = p[s] == null ? "―" : Number(p[s]).toFixed(cfg.digits);
+          const n = document.createElement("span"); n.textContent = s === "before" ? "入る前" : "出た後";
+          row.append(k, v, n);
+          tip.appendChild(row);
+        }
+        tip.hidden = false;
+        // 吹き出しが枠からはみ出さないように置く
+        const scale = svg.getBoundingClientRect().width / W || 1;
+        const tw = tip.offsetWidth;
+        let left = px * scale + 12;
+        if (left + tw > box.clientWidth) left = px * scale - tw - 12;
+        tip.style.left = `${Math.max(0, left)}px`;
+      }
+      function hide() { cur = -1; tip.hidden = true; cross.setAttribute("visibility", "hidden"); }
+      function nearest(clientX) {
+        const rect = svg.getBoundingClientRect();
+        const sx = ((clientX - rect.left) / rect.width) * W;
+        let best = 0;
+        pts.forEach((p, i) => { if (Math.abs(x(p.t) - sx) < Math.abs(x(pts[best].t) - sx)) best = i; });
+        return best;
+      }
+      hit.addEventListener("pointermove", (e) => show(nearest(e.clientX)));
+      hit.addEventListener("pointerdown", (e) => show(nearest(e.clientX)));
+      svg.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") hide(); });
+      svg.addEventListener("focus", () => show(cur < 0 ? pts.length - 1 : cur));
+      svg.addEventListener("blur", hide);
+      svg.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowLeft")  { show(Math.max(0, cur - 1)); e.preventDefault(); }
+        if (e.key === "ArrowRight") { show(Math.min(pts.length - 1, cur + 1)); e.preventDefault(); }
+        if (e.key === "Escape") hide();
+      });
+
+      box.append(svg, tip);
+      return box;
+    }
+
+    // 画面の向きや幅が変わったら、グラフを描き直す
+    let resizeTimer;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => { if (!$("view-stats").hidden) renderStats(); }, 200);
+    });
+
+    // ===================================================
+    //  最初に1回だけ動かす
+    // ===================================================
+    $("date").value = nowDate();
+    $("time").value = nowTime();
+    drawSets();
+    drawStars();
+    renderLast();
+
+    // サービスワーカー（電波がなくても開けるよう、アプリを携帯の中に保管するしくみ）を登録
+    // ファイルをダブルクリックして開いたとき（file://）は使えないので、http/https のときだけ
+    if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    }
+  </script>
+</body>
+</html>
